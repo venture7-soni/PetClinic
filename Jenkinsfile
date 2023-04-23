@@ -1,58 +1,64 @@
-node {
-    properties([buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '5')), disableConcurrentBuilds(), [$class: 'GithubProjectProperty', displayName: '', projectUrlStr: 'https://github.com/gkdevops/PetClinic.git/'], pipelineTriggers([githubPush()])])
+pipeline {
     
-    def MvnHome = tool name: 'MAVEN3', type: 'maven'
-    def MvnCli = "${MvnHome}/bin/mvn"
-
-    stage('Checkout Git'){
-        sh 'echo "Welcome to jenkins"'
-        git changelog: false, credentialsId: 'github_creds', poll: false, url: 'https://github.com/gkdevops/PetClinic.git'
+    agent {
+        label 'agent_1'
     }
     
-    stage('Read Maven POM'){
-        readpom = readMavenPom file: '';
-        def art_version = readpom.version;
-        echo "${art_version}"
+    tools {
+          maven 'MAVEN3'
+          jdk 'JDK8'
     }
     
-    stage('Maven test'){
-        sh "${MvnCli} test"
+    options {
+        buildDiscarder logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '10')
+        disableConcurrentBuilds()
+        timestamps()
     }
     
-    stage('Maven Package'){
-        sh "${MvnCli} package -Dmaven.skip.test=true"
+    parameters {
+        string defaultValue: '', description: 'Version of the java application', name: 'app_version', trim: false
+        choice choices: ['DEV', 'QA', 'INT', 'PRE_PROD'], description: 'Environment name for the code deployment', name: 'APP_ENV'
     }
     
-    stage('Archive Artifacts'){
-        archiveArtifacts artifacts: '**/spring-petclinic-*.war', onlyIfSuccessful: true
-    }
-    
-    stage('Archive Junit'){
-        junit '**/surefire-reports/*.xml'
-    }
-    
-    stage('Archive Artifacts to JFROG'){
-        script {
-          def server = Artifactory.server 'Artifactory'
-          def uploadSpec = """{
-            "files": [
-              {
-                "pattern": "target/*.war",
-                "target": "libs-release-local/PetClinic/"
-              }
-            ]
-          }"""
-          //server.upload(uploadSpec)
-          server.upload spec: uploadSpec, failNoOp: true
+    stages {
+        stage('Code Checkout'){
+            steps {
+                echo "code checkout"
+                git credentialsId: 'github-creds', url: 'https://github.com/gkdevops/PetClinic.git'
+            }
         }
-    }
-    
-    stage('deploy to Server'){
-        ansiblePlaybook '/opt/deploy.yml'
-    }
-    
-    stage('Smoke Test'){
-        sleep 30
-        sh "curl -sSf http://ec2-54-172-228-44.compute-1.amazonaws.com:8080/petclinic"
+        
+        stage('Code Build'){
+            steps {
+                sh "mvn test-compile"
+            }
+        }
+                stage('Unit test') {
+                    steps {
+                        sh "mvn test"
+                    }
+                }
+        stage('SonarQube Scan'){
+          environment {
+            SCANNER_HOME = tool 'sonar_scanner'
+          }
+          steps {
+            withSonarQubeEnv (installationName: 'SonarQube') {
+              sh "${SCANNER_HOME}/bin/sonar-scanner -Dproject.settings=sonar-project.properties"
+            }
+          }
+        }
+        stage("Quality Gate") {
+            steps {
+                timeout(time: 1, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+        stage('Code Package'){
+            steps {
+                sh "mvn package"
+            }
+        }
     }
 }
