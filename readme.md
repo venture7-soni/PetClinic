@@ -5,7 +5,7 @@
 
 password=welcome1
 
-## Running petclinic locally.
+## Running petclinic locally
 ```
 	git clone https://github.com/spring-projects/spring-petclinic.git
 	cd spring-petclinic
