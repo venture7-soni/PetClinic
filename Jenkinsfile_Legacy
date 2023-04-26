@@ -1,0 +1,56 @@
+pipeline {
+    
+    agent {
+        label 'agent_1'
+    }
+    
+    tools {
+          maven 'MAVEN3'
+          jdk 'JDK8'
+    }
+
+    options {
+        buildDiscarder logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '10')
+        disableConcurrentBuilds()
+        timestamps()
+    }
+    
+    stages {
+        stage('Code Checkout'){
+            steps {
+                deleteDir()
+                echo "code checkout"
+                git credentialsId: 'github-creds', url: "https://github.com/gkdevops/PetClinic.git"
+            }
+        }
+        
+        stage('Code Build'){
+            steps {
+                sh "mvn test"
+            }
+        }
+
+        stage('SonarQube Scan'){
+          environment {
+            SCANNER_HOME = tool 'sonar_scanner'
+          }
+          steps {
+            withSonarQubeEnv (installationName: 'SonarQube') {
+              sh "${SCANNER_HOME}/bin/sonar-scanner -Dproject.settings=sonar-project.properties"
+            }
+          }
+        }
+
+        stage('Maven Package'){
+            steps {
+                sh "mvn -Dtests.skip=false package"
+            }
+        }
+        
+        stage('Code Deploy'){
+            steps {
+                sh "ansible-playbook deploy.yaml"
+            }
+        } 
+    }
+}
