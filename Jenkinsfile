@@ -1,2 +1,2 @@
-@Library('jenkins-shared-library') _
+@Library('my-library') _
 javaCommon 'PetClinic'
