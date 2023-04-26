@@ -20,7 +20,7 @@ pipeline {
             steps {
                 deleteDir()
                 echo "code checkout"
-                git credentialsId: 'github-creds', url: "https://github.com/gkdevops/${appName}.git"
+                git credentialsId: 'github-creds', url: "https://github.com/gkdevops/PetClinic.git"
             }
         }
         
