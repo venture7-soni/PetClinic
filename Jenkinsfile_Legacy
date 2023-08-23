@@ -1,32 +1,52 @@
 pipeline {
     
     agent {
-        label 'agent_1'
+        label 'agent-1'
     }
     
     tools {
-          maven 'MAVEN3'
-          jdk 'JDK8'
+          maven 'MAVEN_3'
+          jdk 'JAVA8'
     }
 
     options {
         buildDiscarder logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '10')
         disableConcurrentBuilds()
         timestamps()
+        ansiColor('xterm')
+
     }
-    
+
+    parameters {
+        string description: 'The GitHub Branch Name', name: 'branch_name'
+    }
+
     stages {
         stage('Code Checkout'){
             steps {
                 deleteDir()
                 echo "code checkout"
-                git credentialsId: 'github-creds', url: "https://github.com/gkdevops/PetClinic.git"
+                git branch: '$branch_name', credentialsId: 'github-creds', url: "https://github.com/gkdevops/PetClinic.git"
             }
         }
-        
-        stage('Code Build'){
+
+        stage('Secrets Detection'){
+            steps {
+                sh "gitleaks detect --report-path gitleaks-report.json"
+            }
+        }
+
+        stage('Build & Unit Tests'){
             steps {
                 sh "mvn test"
+            }
+            post {
+                always {
+                    echo "Build & Unit Tests executed "
+                }
+                success {
+                    echo "Build & Unit Tests completed successfuly"                        
+                }
             }
         }
 
@@ -41,16 +61,30 @@ pipeline {
           }
         }
 
-        stage('Maven Package'){
+        stage('Upload Artifact'){
             steps {
-                sh "mvn -Dtests.skip=false package"
+                sh "mvn -Dtests.skip=false deploy"
             }
         }
-        
-        stage('Code Deploy'){
+        stage('Deploy to Dev'){
             steps {
-                sh "ansible-playbook deploy.yaml"
+                echo "Ansible Deploying to Dev environment"
+                ansiblePlaybook installation: 'ANSIBLE', inventory: '/home/ubuntu/ansible/inventory', playbook: 'deploy.yaml', sudoUser: null
             }
-        } 
+        }
+    }
+    post {
+        always {
+            echo "I will always run"
+        }
+        failure {
+            echo "I will run only on failure"
+        }
+        success {
+            echo "I will run if the job is successful"
+        }
+        aborted {
+            echo "I will run only when job is aborted"
+        }
     }
 }
