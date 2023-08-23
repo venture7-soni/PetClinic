@@ -36,17 +36,9 @@ pipeline {
             }
         }
 
-        stage('Build & Unit Tests'){
+        stage('Unit Tests & Package'){
             steps {
-                sh "mvn test"
-            }
-            post {
-                always {
-                    echo "Build & Unit Tests executed "
-                }
-                success {
-                    echo "Build & Unit Tests completed successfuly"                        
-                }
+                sh "mvn package"
             }
         }
 
@@ -61,30 +53,29 @@ pipeline {
           }
         }
 
-        stage('Upload Artifact'){
+        stage('Build & Upload Docker'){
             steps {
-                sh "mvn -Dtests.skip=false deploy"
+                withCredentials([usernamePassword(credentialsId: 'docker-registry', passwordVariable: 'JFROGPASSWORD', usernameVariable: 'JFROGUSER')]) {
+                    sh '''
+                    IMAGE_TAG=`git rev-parse --short HEAD`
+                    sudo docker login -u $JFROGUSER -p $JFROGPASSWORD ec2-54-226-169-77.compute-1.amazonaws.com:8082
+                    sudo docker image build -t ec2-54-226-169-77.compute-1.amazonaws.com:8082/mypets-docker/petclinic:${IMAGE_TAG} .
+                    sudo docker image push ec2-54-226-169-77.compute-1.amazonaws.com:8082/mypets-docker/petclinic:${IMAGE_TAG}
+                    '''
+                }
             }
         }
+        stage('Update Kubernetes config'){
+            steps {
+                echo "Update K8S YAML files for Dev env"
+            }
+        }
+
         stage('Deploy to Dev'){
             steps {
-                echo "Ansible Deploying to Dev environment"
-                ansiblePlaybook installation: 'ANSIBLE', inventory: '/home/ubuntu/ansible/inventory', playbook: 'deploy.yaml', sudoUser: null
+                echo "Deploy to Dev Kubernetes Cluster"
             }
         }
-    }
-    post {
-        always {
-            echo "I will always run"
-        }
-        failure {
-            echo "I will run only on failure"
-        }
-        success {
-            echo "I will run if the job is successful"
-        }
-        aborted {
-            echo "I will run only when job is aborted"
-        }
+
     }
 }
