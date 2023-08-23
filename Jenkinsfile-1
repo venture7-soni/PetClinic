@@ -40,6 +40,14 @@ pipeline {
             steps {
                 sh "mvn test"
             }
+            post {
+                always {
+                    echo "Build & Unit Tests executed "
+                }
+                success {
+                    echo "Build & Unit Tests completed successfuly"                        
+                }
+            }
         }
 
         stage('SonarQube Scan'){
@@ -63,6 +71,20 @@ pipeline {
                 echo "Ansible Deploying to Dev environment"
                 ansiblePlaybook installation: 'ANSIBLE', inventory: '/home/ubuntu/ansible/inventory', playbook: 'deploy.yaml', sudoUser: null
             }
+        }
+    }
+    post {
+        always {
+            echo "I will always run"
+        }
+        failure {
+            echo "I will run only on failure"
+        }
+        success {
+            echo "I will run if the job is successful"
+        }
+        aborted {
+            echo "I will run only when job is aborted"
         }
     }
 }
