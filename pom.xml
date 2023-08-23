@@ -456,7 +456,7 @@
     <repository>
         <id>central</id>
         <name>eea06712b461-releases</name>
-        <url>http://ec2-54-211-16-84.compute-1.amazonaws.com:8081/artifactory/petclinic-libs-release-local</url>
+        <url>http://ec2-54-226-169-77.compute-1.amazonaws.com:8081/artifactory/petclinic-libs-release-local</url>
     </repository>
 </distributionManagement>
     <url>demopetclinic</url>
