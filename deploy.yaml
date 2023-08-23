@@ -15,7 +15,7 @@
 
      - name: To copy war file
        copy:
-         src: /home/ubuntu/jenkins_agent/workspace/PetClinic_Legacy/target/spring-petclinic-4.2.5.war
+         src: /home/ubuntu/jenkins_agent/workspace/PetClinic_Pipeline_Legacy/target/spring-petclinic-4.2.5.war
          dest: /home/ubuntu/apache-tomcat/webapps/
 
      - name: To START apache tomcat
