@@ -11,12 +11,12 @@
        ignore_errors: yes
 
      - name: To Remove old war files
-       shell: rm -rf /home/ubuntu/apache-tomcat-8.5.88/webapps/spring*
+       shell: rm -rf /home/ubuntu/apache-tomcat/webapps/spring*
 
      - name: To copy war file
        copy:
          src: /home/ubuntu/jenkins_agent/workspace/PetClinic_Legacy/target/spring-petclinic-4.2.5.war
-         dest: /home/ubuntu/apache-tomcat-8.5.88/webapps/
+         dest: /home/ubuntu/apache-tomcat/webapps/
 
      - name: To START apache tomcat
-       shell: nohup /home/ubuntu/apache-tomcat-8.5.88/bin/catalina.sh start
+       shell: nohup /home/ubuntu/apache-tomcat/bin/catalina.sh start
