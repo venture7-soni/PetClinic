@@ -1,47 +1,68 @@
-node{
+pipeline {
+    
+    agent {
+        label 'agent-1'
+    }
+    
+    tools {
+          maven 'MAVEN_3'
+          jdk 'JAVA8'
+    }
 
-    def MvnHome = tool name: 'MAVEN3', type: 'maven'
-    def MvnCli = "${MvnHome}/bin/mvn"
-    
-    properties([buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '30', numToKeepStr: '')), disableConcurrentBuilds(), disableResume(), [$class: 'GithubProjectProperty', displayName: '', projectUrlStr: 'https://github.com/gkdevops/PetClinic.git/'], pipelineTriggers([githubPush()])])
-    
-    stage('Code Checkout'){
-        git credentialsId: 'github-creds', url: 'https://github.com/gkdevops/PetClinic.git'
+    options {
+        buildDiscarder logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '10')
+        disableConcurrentBuilds()
+        timestamps()
+        ansiColor('xterm')
+
     }
-    
-    stage('Code Quality'){
-        sh "${MvnCli} compile"
-        sh "${MvnCli} sonar:sonar -Dsonar.projectKey=petclinic -Dsonar.host.url=http://ec2-54-82-182-81.compute-1.amazonaws.com:9000 -Dsonar.login=4da6f8b774233fa369dc06a2b34dc2fab3483b3c"
+
+    parameters {
+        string description: 'The GitHub Branch Name', name: 'branch_name'
     }
-    
-    stage("Junit Test"){
-        sh "${MvnCli} test"
-    }
-    
-    stage("Pacakge Code"){
-        sh "${MvnCli} package -Dmaven.test.skip=true"
-    }
-    
-    stage('Archive Artifactory'){
-            script {
-              def server = Artifactory.server 'artifactory'
-              def uploadSpec = """{
-                "files": [
-                  {
-                    "pattern": "target/*.war",
-                    "target": "libs-release-local/"
-                  }
-                ]
-              }"""
-              server.upload(uploadSpec)
+
+    stages {
+        stage('Code Checkout'){
+            steps {
+                deleteDir()
+                echo "code checkout"
+                git branch: '$branch_name', credentialsId: 'github-creds', url: "https://github.com/gkdevops/PetClinic.git"
             }
-    }
-    
-    stage('Deploy to Server'){
-        ansiblePlaybook installation: 'ansible', playbook: '/opt/deploy.yml'
-    }
-    
-    stage('Smoke test'){
-        sh "curl -sSf http://ec2-54-242-248-169.compute-1.amazonaws.com:8080/petclinic >/dev/null"
+        }
+
+        stage('Secrets Detection'){
+            steps {
+                sh "gitleaks detect --report-path gitleaks-report.json"
+            }
+        }
+
+        stage('Build & Unit Tests'){
+            steps {
+                sh "mvn test"
+            }
+        }
+
+        stage('SonarQube Scan'){
+          environment {
+            SCANNER_HOME = tool 'sonar_scanner'
+          }
+          steps {
+            withSonarQubeEnv (installationName: 'SonarQube') {
+              sh "${SCANNER_HOME}/bin/sonar-scanner -Dproject.settings=sonar-project.properties"
+            }
+          }
+        }
+
+        stage('Upload Artifact'){
+            steps {
+                sh "mvn -Dtests.skip=false deploy"
+            }
+        }
+        stage('Deploy to Dev'){
+            steps {
+                echo "Ansible Deploying to Dev environment"
+                ansiblePlaybook installation: 'ANSIBLE', inventory: '/home/ubuntu/ansible/inventory', playbook: 'deploy.yaml', sudoUser: null
+            }
+        }
     }
 }
