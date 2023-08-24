@@ -14,11 +14,16 @@ pipeline {
         disableConcurrentBuilds()
         timestamps()
         ansiColor('xterm')
+    }
+
+    environment {
+        registry_url="ec2-34-238-240-54.compute-1.amazonaws.com:8082"
 
     }
 
     parameters {
         string description: 'The GitHub Branch Name', name: 'branch_name'
+        string description: 'The Environment to Deploy', name: 'env_name'
     }
 
     stages {
@@ -43,14 +48,17 @@ pipeline {
         }
 
         stage('SonarQube Scan'){
-          environment {
-            SCANNER_HOME = tool 'sonar_scanner'
-          }
-          steps {
-            withSonarQubeEnv (installationName: 'SonarQube') {
-              sh "${SCANNER_HOME}/bin/sonar-scanner -Dproject.settings=sonar-project.properties"
+            when {
+                expression { params.env_name == 'dev' }
             }
-          }
+            environment {
+                SCANNER_HOME = tool 'sonar_scanner'
+            }
+            steps {
+                withSonarQubeEnv (installationName: 'SonarQube') {
+                    sh "${SCANNER_HOME}/bin/sonar-scanner -Dproject.settings=sonar-project.properties"
+                }
+            }
         }
 
         stage('Build & Upload Docker'){
@@ -58,9 +66,9 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'docker-registry', passwordVariable: 'JFROGPASSWORD', usernameVariable: 'JFROGUSER')]) {
                     sh '''
                     IMAGE_TAG=`git rev-parse --short HEAD`
-                    sudo docker login -u $JFROGUSER -p $JFROGPASSWORD ec2-54-226-169-77.compute-1.amazonaws.com:8082
-                    sudo docker image build -t ec2-54-226-169-77.compute-1.amazonaws.com:8082/mypets-docker/petclinic:${IMAGE_TAG} .
-                    sudo docker image push ec2-54-226-169-77.compute-1.amazonaws.com:8082/mypets-docker/petclinic:${IMAGE_TAG}
+                    sudo docker login -u $JFROGUSER -p $JFROGPASSWORD $registry_url
+                    sudo docker image build -t $registry_url/mypets-docker/petclinic:${IMAGE_TAG} .
+                    sudo docker image push $registry_url/mypets-docker/petclinic:${IMAGE_TAG}
                     '''
                 }
             }
@@ -68,12 +76,23 @@ pipeline {
         stage('Update Kubernetes config'){
             steps {
                 echo "Update K8S YAML files for Dev env"
+                sh '''
+                IMAGE_TAG=`git rev-parse --short HEAD`
+                cd cicd
+                OLDIMAGE=`cat deployment.yaml | grep "8082" | awk -F ":" '{print $NF}'`
+                sed -i "s/$OLDIMAGE/$IMAGE_TAG/" deployment.yaml
+                '''
             }
         }
 
         stage('Deploy to Dev'){
             steps {
-                echo "Deploy to Dev Kubernetes Cluster"
+                withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'kubeconfig')]) {
+                    sh '''
+                    cd cicd/
+                    kubectl apply -f deployment.yaml --kubeconfig $kubeconfig
+                    '''
+                }
             }
         }
 
